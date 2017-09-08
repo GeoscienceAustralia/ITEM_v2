@@ -1,10 +1,10 @@
 ### 
 This workflow was used to create Digital Elevation Model for ITEM version 1.
-It runs within arcpy environment and not used to run in NCI.
+It runs within arcpy environment and can not be used to run in NCI.
 
-DEM AUTOMATION
+# DEM AUTOMATION
 
-# start python environment in ARCMAP and copy OFFSET and vector files to the workspace directory.
+start python environment in ARCMAP and copy OFFSET and vector files to the workspace directory.
 
 import arcpy, glob
 from arcpy.sa import *
@@ -15,7 +15,7 @@ ws = arcpy.env.workspace
 sr = "C:\Program Files (x86)\ArcGIS\Desktop10.4\Reference Systems\International Map Of The World.prj"
 
 
-#create TIN
+# create TIN
 featureclasses = arcpy.ListFeatureClasses()
 for i in featureclasses:
     ot=i.split(".shp")[0]
@@ -23,7 +23,7 @@ for i in featureclasses:
     print feat 
     arcpy.CreateTin_3d(out_tin=ot, spatial_reference=sr, in_features=feat, constrained_delaunay="DELAUNAY")
 
-#Create tin to raster
+# Create tin to raster
 Copy those tin rasters directory into some other directories like (C:\Users\u81051\qld_prod) and then set the new workspace.
 arcpy.env.workspace = "C:\Users\qld_prod"    
 TINList = arcpy.ListDatasets()
@@ -33,7 +33,7 @@ for i in TINList:
     arcpy.TinRaster_3d(i, outRaster, "Float", "LINEAR", "CELLSIZE 0.00025", 1)
 
 
-#export raster to tif file
+# export raster to tif file
 
 my_raster = glob.glob(r"C:\\Users\\arcmap-proj\\dem_prod\\con*O")
 arcpy.RasterToOtherFormat_conversion(my_raster, ws, "TIFF")
@@ -59,7 +59,7 @@ for i in tif_list:
             fl_name = "prod_dem_" + cell + ".tif"
             elevation.save(fl_name)
 
-#This is to do for single product
+# This is to do for single product
 
 arcpy.env.extent = "130 -13 131 -12"
 raster0 = arcpy.Raster("ARG25_OFFSET_130_-013_1987_01_01_2015_12_31_MEDIAN.tif")
