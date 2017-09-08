@@ -1,0 +1,74 @@
+#!/bin/bash
+#PBS -N REL-GA
+#PBS -P u46
+#PBS -q normal 
+#PBS -l walltime=10:00:00,ncpus=1,mem=16GB
+#PBS -l wd
+
+# This script is the second process to generate ITEM relative(binary image), confidence layer (standard deviation)
+# and offset(tidal height rasters) geotiff files for DEM generation
+# It needs all the output files generated for ndwi and standard deviation stats from agdc-stats application package.
+# The codes and config files are in multipolyregion branch of agdc-statics package available in
+#  https://github.com/GeoscienceAustralia/agdc_statistics
+# To generate indexed netcdf files it needs to execute the following script, once all 306 tiff files are generated.
+
+# Create rel, conf, offset rasters
+####################################################
+module load agdc-py3-prod
+
+IDIR="/g/data/r78/ITEM/OUTPUT_GA_TIFF"
+ODIR="/g/data/r78/ITEM/OUTPUT_GA_PRODUCT"
+STDDIR="/g/data/r78/ITEM/GOOD_PRODUCTS"
+NCDIR="/g/data/r78/ITEM/ITEM_NC"
+#ODIR="/g/data/r78/ITEM/junk"
+date_range="19860101_20170101"
+
+cd /g/data/r78/ITEM/OUTPUT_GA_TIFF
+
+while read line
+do
+        ID=$(echo $line|awk -F"," '{print $1}')
+        cell=$(echo $line|awk -F"," '{print $2}')
+
+        echo "feature id accepted " $ID
+        # create first binary 0 and 1 values for water and land
+        for i in $(ls "$IDIR"/ITEM_"$ID"_*MEDNDWI*.tif|awk '{print $NF}');
+        do
+            per=$(echo $i|awk -F".tif" '{print $1}'|awk -F"_" '{print $NF}')
+            gdal_calc.py -A $i --calc="1*(A<0)" --NoDataValue=-9 --overwrite --outfile="$ODIR"/ITEM_BINARY_"$ID"_"$per".tif
+        done
+        # create special standard deviation tif file for each polygon depending on condition 
+        # if all layers have 0 value except the last layer then mask it out on the last layer
+        IDIR="/g/data/r78/ITEM/OUTPUT_GA_PRODUCT"
+        gdal_calc.py -A "$IDIR"/ITEM_BINARY_"$ID"_10.tif -B "$IDIR"/ITEM_BINARY_"$ID"_20.tif -C "$IDIR"/ITEM_BINARY_"$ID"_30.tif -D "$IDIR"/ITEM_BINARY_"$ID"_40.tif -E "$IDIR"/ITEM_BINARY_"$ID"_50.tif -F "$IDIR"/ITEM_BINARY_"$ID"_60.tif -G "$IDIR"/ITEM_BINARY_"$ID"_70.tif -H "$IDIR"/ITEM_BINARY_"$ID"_80.tif -I "$IDIR"/ITEM_BINARY_"$ID"_90.tif -J /g/data/r78/ITEM/OUTPUT_GA_TIFF/ITEM_"$ID"_*STD_PER_90.tif --calc="(J)*logical_not(logical_and(A==0,logical_and(B==0,logical_and(C==0,logical_and(D==0,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==1)))))))))" --type=Float32 --NoDataValue=0 --overwrite --outfile=IT_STD_"$ID".tif      
+        # Now create the final std raster for the polygon
+        gdal_calc.py -A "$IDIR"/ITEM_"$ID"_*STD_PER_10.tif -B "$IDIR"/ITEM_"$ID"_*_STD_PER_20.tif -C "$IDIR"/ITEM_"$ID"_*_STD_PER_30.tif -D "$IDIR"/ITEM_"$ID"_*STD_PER_40.tif -E "$IDIR"/ITEM_"$ID"_*STD_PER_50.tif -F "$IDIR"/ITEM_"$ID"_*STD_PER_60.tif -G "$IDIR"/ITEM_"$ID"_*STD_PER_70.tif -H "$IDIR"/ITEM_"$ID"_*STD_PER_80.tif -I IT_STD_"$ID".tif --calc="((A+B+C+D+E+F+G+H+I)/9)" --type=Float32 --NoDataValue=-6666 --overwrite --outfile=/g/data/r78/ITEM/NEW_ITEM/ITEM_STD_FINAL_"$ID"_"$cell".tif
+        # create relative tif file with the same previous condition
+        echo "Creating relative tif file "
+        gdal_calc.py -A "$IDIR"/ITEM_BINARY_"$ID"_10.tif -B "$IDIR"/ITEM_BINARY_"$ID"_20.tif -C "$IDIR"/ITEM_BINARY_"$ID"_30.tif -D "$IDIR"/ITEM_BINARY_"$ID"_40.tif -E "$IDIR"/ITEM_BINARY_"$ID"_50.tif -F "$IDIR"/ITEM_BINARY_"$ID"_60.tif -G "$IDIR"/ITEM_BINARY_"$ID"_70.tif -H "$IDIR"/ITEM_BINARY_"$ID"_80.tif -I "$IDIR"/ITEM_BINARY_"$ID"_90.tif --calc="((A+B+C+D+E+F+G+H+I))*logical_not(logical_and(A==0,logical_and(B==0,logical_and(C==0,logical_and(D==0,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==1)))))))))" --type=Int16 --NoDataValue=0 --overwrite --outfile=/g/data/r78/ITEM/NEW_ITEM/ITEM_REL_"$ID"_"$cell".tif
+        gdal_translate -of netcdf -co FORMAT=NC4 /g/data/r78/ITEM/NEW_ITEM/ITEM_REL_"$ID"_"$cell".tif "$NCDIR"/ITEM_REL_"$ID"_"$cell".nc 
+        IDIR="/g/data/r78/ITEM/OUTPUT_GA_TIFF"
+        # create now offset file for DEM purpose
+        echo "Creating OFFSET tif file"
+        for j in {10..90..10};
+        do
+            echo $j
+            bb=$(cat /g/data/r78/ITEM/script/all_median.csv|awk -F"," -v it=$j -v id=$ID '{if ($1 == id && $2 == it) {print $NF*1000}}')
+            let r_"$j"="$bb"
+        done
+        echo "For ITEM " $ID "," "$r_10" "," "$r_20" "," "$r_30" "," "$r_40" "," "$r_50" "," "$r_60" "," "$r_70" "," "$r_80" "," "$r_90"
+        gdal_calc.py -A /g/data/r78/ITEM/NEW_ITEM/ITEM_REL_"$ID"_"$cell".tif --calc="$r_10*(A==1)+$r_20*(A==2)+$r_30*(A==3)+$r_40*(A==4)+$r_50*(A==5)+$r_60*(A==6)+$r_70*(A==7)+$r_80*(A==8)+$r_90*(A==9)" --NoDataValue=-6666 --overwrite --outfile=/g/data/r78/ITEM/NEW_ITEM/ITEM_OFFSET_"$ID"_"$cell".tif
+        # This is for not contiguity raster 
+        #gdal_calc.py -A "$IDIR"/ITEM_BINARY_"$ID"_10.tif -B "$IDIR"/ITEM_BINARY_"$ID"_20.tif -C "$IDIR"/ITEM_BINARY_"$ID"_30.tif -D "$IDIR"/ITEM_BINARY_"$ID"_40.tif -E "$IDIR"/ITEM_BINARY_"$ID"_50.tif -F "$IDIR"/ITEM_BINARY_"$ID"_60.tif -G "$IDIR"/ITEM_BINARY_"$ID"_70.tif -H "$IDIR"/ITEM_BINARY_"$ID"_80.tif -I "$IDIR"/ITEM_BINARY_"$ID"_90.tif --calc="((A+B+C+D+E+F+G+H+I))*logical_not(logical_or(logical_and(A==1,logical_and(B==0,logical_and(C==0,logical_and(D==0,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==0,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==1,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==1,logical_and(F==1,logical_and(G==0,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==1,logical_and(F==1,logical_and(G==1,logical_and(H==0,I==0)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==1,logical_and(F==1,logical_and(G==1,logical_and(H==1,I==1)))))))),logical_or(logical_and(A==1,logical_and(B==1,logical_and(C==1,logical_and(D==1,logical_and(E==1,logical_and(F==1,logical_and(G==1,logical_and(H==1,I==0)))))))),logical_and(A==1,logical_and(B==1,logical_and(C==0,logical_and(D==0,logical_and(E==0,logical_and(F==0,logical_and(G==0,logical_and(H==0,I==0)))))))))))))))))" --type=Int16 --NoDataValue=0 --overwrite --outfile=/g/data/r78/ITEM/NEW_ITEM/ITEM_NOT_CONTIGOUS_"$ID".tif
+
+done < tidal_model.csv 
+
+## Run the following script for indexeble netcdf datasets
+#####################################################
+
+# python item_all_netcdf.py REL
+# python item_all_netcdf.py STD 
+echo done
+wait
+
+

@@ -1,0 +1,21 @@
+#!/bin/bash
+#PBS -N CR_TIFF 
+#PBS -P u46
+#PBS -q normal 
+#PBS -l walltime=05:00:00,ncpus=1,mem=16GB
+#PBS -l wd
+
+module load agdc-py3-prod
+
+cd /g/data/r78/ITEM/OUTPUT_GA
+ODIR="/g/data/r78/ITEM/OUTPUT_GA_TIFF"
+#Create all into geotiff files
+for i in $(ls -ltr ITEM_*.nc|awk '{print $NF}');
+do
+        nfile=$(echo $i|awk -F".nc" '{print $1}')
+        j=$(gdalinfo $i |grep "NETCDF:"|grep -v dataset|awk -F"=" '{print $2}')
+        fname=$(echo $j|awk -F":" '{print substr($2, 2, length($2)-5)".tif"}')
+        gdal_translate -co "COMPRESS=LZW"  $j "$ODIR"/"$fname"
+done
+
+
