@@ -11,9 +11,9 @@ The following steps are used to create ITEM version 2 products.
 
 1. First run agdc_stats using multipolyregion branch from https://github.com/GeoscienceAustralia/agdc_statistics.
    Use config files(item_10.yaml, item_20.yaml, .. item_90.yaml) to run statistics ndwi and stddev. 
-   The source code and config files are under agdc_statistics/datacube and agdc_statistics/config files in this
-   branch. 
-
+   The source code and config files are under agdc_statistics/datacube_stats and agdc_statistics/configurations
+   respectively.
+   
 2. Once all the statistics netcdf files are generated, create tiff files
 
    qsub run_create_tiff.pbs
